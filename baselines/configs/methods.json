@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "common": {
+    "SUCCESS_MW_LOW": 9000.0,
+    "SUCCESS_MW_HIGH": 11000.0,
+    "SUCCESS_PDI_MAX": 1.5,
+    "SUCCESS_CONC_MIN": 70.0,
+    "TARGET_MW": 10000.0,
+    "TARGET_PDI": 1.45,
+    "TARGET_CONC": 80.0
+  },
+  "engine_parameters": {
+    "KAPPA": 0.13,
+    "XI": 0.0,
+    "PROPERTY_TARGET_WEIGHT": 0.25,
+    "RFF_COMPONENTS": 512,
+    "RFF_GAMMA": 0.8,
+    "N_ESTIMATORS": 500,
+    "MIN_SAMPLES_LEAF": 2,
+    "MAX_FEATURES": 1.0,
+    "GAMMA_QUANTILE": 0.25,
+    "N_EI_CANDIDATES": 24,
+    "N_STARTUP_ITERATIONS": 3,
+    "RANDOM_PROB": 0.05,
+    "D_MODEL": 96,
+    "NHEAD": 4,
+    "NUM_LAYERS": 3,
+    "FF_MULT": 4,
+    "DROPOUT": 0.1,
+    "EPOCHS": 180,
+    "BATCH_SIZE": 64,
+    "LR": 0.002,
+    "WEIGHT_DECAY": 0.0001,
+    "MW_WEIGHT": 1.8,
+    "PDI_WEIGHT": 2.4,
+    "CONC_WEIGHT": 2.2,
+    "MW_WINDOW_WEIGHT": 1.0,
+    "PDI_WINDOW_WEIGHT": 1.2,
+    "CONC_WINDOW_WEIGHT": 1.2,
+    "TARGET_PULL_WEIGHT": 0.6,
+    "VALID_SUFFIXES": [1, 5, 10]
+  }
+}
