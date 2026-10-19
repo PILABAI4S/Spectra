@@ -1,3 +1,3 @@
-"""Spectral state navigation with statistics-patch spectral inputs."""
+"""Spectral state navigation with full-intensity CNN spectral inputs."""
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"

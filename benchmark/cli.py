@@ -88,8 +88,8 @@ def execute(args):
     indices = [args.seed_index] if args.seed_index is not None else list(range(len(seeds)))
     if args.check_only:
         indices = indices[:1]
-    initial_file = (args.initial_file or args.data_dir / "Initial_experiments.xlsx").resolve()
-    all_file = (args.all_file or args.data_dir / "All_experiments.xlsx").resolve()
+    initial_file = (args.initial_file or args.data_dir / "Initial_experiments_sol.xlsx").resolve()
+    all_file = (args.all_file or args.data_dir / "All_experiments_sol.xlsx").resolve()
     spectra = (args.spectra_root or args.data_dir).resolve()
     _, _, _, _, checked = load_data(initial_file, all_file)
     if args.smoke:

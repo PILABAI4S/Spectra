@@ -1,49 +1,9 @@
 # Spectral-State Navigation
 
-Spectral-state navigation is a closed-loop optimization method for identifying
-lithographic polymers that satisfy predefined molecular-weight (Mw), dispersity
-(PDI) and conversion requirements. Its predictive model, SPA-Former, combines
-GPC, NMR and FTIR spectral features with reaction conditions to evaluate
-candidate experiments. The model is updated as experimental evidence
-accumulates, and the next experimental batch is selected using predicted
-properties.
-
-This repository implements spectral-state navigation and its comparison
-methods for retrospective database-replay evaluation.
-
-## Method Overview
-
-1. **Define a spectral reference.** Fixed target GPC, NMR and FTIR spectra are
-   constructed from the initial revealed experiments using a KNN mapping from
-   the specified target property values.
-2. **Learn spectral-state representations.** Each spectrum is divided into 20
-   patches, represented by five intensity statistics per patch. SPA-Former
-   combines these features with reaction conditions through cross-attention
-   and a shared three-layer Transformer encoder. It jointly predicts Mw, PDI,
-   conversion and four auxiliary spectral-distance outputs relative to the
-   fixed target spectra.
-3. **Evaluate untested candidates.** Candidate spectral patch features are
-   estimated from the eight nearest revealed samples in standardized
-   reaction-condition space. The fixed target spectra define the auxiliary
-   supervision labels; they are not direct model inputs during candidate
-   evaluation. Candidates are ranked by predicted property-window violations
-   and deviations from target property values, without an explicit
-   spectral-distance term in the ranking score.
-4. **Select, reveal and update.** Each batch receives the lowest score among
-   its 12 time-resolved candidate states. The lowest-scoring untested batch is
-   selected, its stored spectra and measured properties are revealed, and all
-   12 states are added to the accumulated training dataset. The procedure
-   repeats until a measured sample meets all property criteria or the
-   iteration limit is reached.
-
-Spectral information therefore contributes through the model inputs and
-auxiliary training objectives, while measured properties determine final
-target attainment. Database replay does not perform new physical experiments.
-
-## Comparison Methods
-
-Descriptor BO (Mean, PI, EI, LCB and UCB), Random Forest, TPE-24, Random Search,
-Descriptor Transformer and TabPFN are included for comparison.
+Spectral state navigation and its comparison methods. The model retains the
+complete intensity sequence in each spectral patch and encodes it using a
+learnable, modality-specific 1D CNN. Methods include Descriptor BO (Mean, PI, EI, LCB,
+UCB), Random Forest, TPE-24, Random Search, Descriptor Transformer and TabPFN.
 
 ## Files
 
@@ -67,18 +27,12 @@ permissions. These weights and credentials are not included.
 
 ## Data
 
-Download the GPC, NMR and FTIR spectral dataset from this repository's
-[GitHub Releases](https://github.com/PILABAI4S/Spectral-state-navigation/releases).
-Extract the spectral data archives into the project directory so that the
-`GPC/`, `NMR/` and `FTIR/` folders sit alongside the two experiment workbooks
-included in this repository.
-
 Data are read from the project directory by default. Alternatively, use
 `--data-dir` to select another directory. Required contents:
 
 ```text
-Initial_experiments.xlsx
-All_experiments.xlsx
+Initial_experiments_sol.xlsx
+All_experiments_sol.xlsx
 GPC/<batch>-01.csv ... <batch>-12.csv
 NMR/<batch>-01.csv ... <batch>-12.csv
 FTIR/<batch>-01.csv ... <batch>-12.csv
@@ -122,12 +76,46 @@ the same newly generated seeds for every selected method. Historical seeds
 are not bundled. Generated seeds and results stay in local output folders,
 which are excluded from Git. Use `--help` for available options.
 
-The model retains seven prediction tasks and 180 epochs per round, restoring the
-minimum-validation-loss checkpoint. Ranking uses predicted properties without
-a spectral-distance term. Descriptor BO retains its BayesianRidge/RBF-random-
+## Spectral State Navigation
+
+Each measured GPC, NMR and FTIR spectrum is divided into 20 contiguous index
+patches. Full intensity sequences are retained, with zero padding only for
+short patches; the five handcrafted patch statistics are not used as model
+inputs. The CNN has two Conv1d layers: 1 to 16 channels with kernel 7, stride 4
+and padding 3, then 16 to 32 channels with kernel 5, stride 4 and padding 2.
+Each convolution is followed by GELU. Flattened features are projected to a
+96-dimensional token. Each modality has its own CNN; weights are shared across
+patches within a modality.
+
+The 60 spectral tokens undergo modality-specific cross-attention, are combined
+with an MLP-embedded condition token and are processed by a shared three-layer
+Transformer encoder (dimension 96, four attention heads, feed-forward dimension
+384, dropout 0.10). The seven outputs are D_GPC, D_NMR, D_FTIR, D_aux, Mw, PDI
+and Conversion. D_aux is the sum of the three raw modality distances.
+
+Training uses measured spectra and matched reaction conditions. Fixed target
+spectra are constructed from up to 24 initial neighbors in property space and
+provide spectral-distance supervision; they are not direct candidate-model
+inputs. For an unmeasured candidate, the complete raw-patch vectors of its eight
+nearest revealed samples in standardized condition space are combined to
+estimate candidate spectral features. These features and the candidate
+conditions are then evaluated by the trained model.
+
+The model retains all seven prediction tasks. The mean loss of the three
+modality-distance tasks has aggregate weight 0.4; D_aux, Mw, PDI and Conversion
+have weights 0.8, 1.8, 2.4 and 2.2. At every round, the model is reinitialized
+and trained for 180 epochs using AdamW (learning rate 0.002, weight decay
+0.0001, batch size 64, gradient norm clip 1.0), restoring the checkpoint with
+minimum validation loss. There is no early stopping. Sample suffixes 01, 05
+and 10 of each revealed batch form the validation set.
+
+Ranking uses predicted properties without an explicit spectral-distance term.
+Batch score is the minimum of its 12 member scores, and the lowest-scoring
+unrevealed batch is selected. Comparison-method implementations are unchanged.
+Descriptor BO retains its BayesianRidge/RBF-random-
 feature surrogate, not an exact GP; UCB minimizes mu + 0.13 sigma.
 
 These are database-replay programs. Success requires at least one measured
-sample with 9000 < Mw < 11000, PDI < 1.50 and Conversion > 70%. Numerical
-algorithms and method-specific preprocessing are unchanged. Select a code
+sample with 9000 <= Mw <= 11000, PDI < 1.50 and Conversion > 70%. The replay
+protocol and comparison-method implementations are retained. Select a code
 license before public distribution.

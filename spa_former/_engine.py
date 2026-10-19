@@ -1,4 +1,8 @@
-"""Spectral state navigation numerical engine, configured by the portable runner."""
+"""Spectral state navigation training engine, configured by the public runner.
+
+The raw-patch adapter replaces the compatibility patch projection and input
+builders. Their initialization order is retained for numerical parity.
+"""
 
 import csv
 import json
@@ -9,13 +13,20 @@ from pathlib import Path
 
 import numpy as np
 import openpyxl
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
+
+try:
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import DataLoader, TensorDataset
+except ModuleNotFoundError as exc:
+    raise SystemExit(
+        "PyTorch is required. Install the dependencies in requirements.txt."
+    ) from exc
+
 
 SETTINGS = globals().get("RUNTIME_CONFIG")
 if SETTINGS is None:
-    raise RuntimeError("Use the spa_former runner to configure paths and a generated run seed.")
+    raise RuntimeError("Use the spa_former runner to configure paths and a recorded run seed.")
 INITIAL_XLSX = Path(SETTINGS["initial_file"])
 ALL_XLSX = Path(SETTINGS["all_file"])
 SPECTRA_ROOT = Path(SETTINGS["spectra_root"])
@@ -25,12 +36,13 @@ MW_SUCCESS_LOW, MW_SUCCESS_HIGH = 9000.0, 11000.0
 PDI_SUCCESS_MAX, CONC_SUCCESS_MIN = 1.50, 70.0
 VALID_SUFFIXES = {1, 5, 10}
 PATCH_COUNT = {"GPC": 20, "NMR": 20, "IR": 20}
+# Compatibility initialization only. RawPatchClosedLoop uses full intensity sequences.
 PATCH_STATS = 5
 NMR_LOCAL_NORMALIZATION = False
 NMR_PEAK_MAD_FACTOR = 6.0
 NMR_NORMALIZATION_EPS = 1e-8
 MODALITIES = ["GPC", "NMR", "IR"]
-TOKEN_COUNT = sum(PATCH_COUNT[m] for m in MODALITIES)
+TOKEN_COUNT = sum(PATCH_COUNT[modality] for modality in MODALITIES)
 MAX_ROUNDS = int(SETTINGS["max_rounds"])
 EPOCHS_PER_ROUND = int(SETTINGS["epochs"])
 BATCH_SIZE = 64
@@ -47,7 +59,7 @@ ACQ_MODALITY_WEIGHTS = {"GPC": 1.0, "NMR": 1.0, "IR": 1.0}
 ACQ_MODALITY_BALANCE_WEIGHT = 0.0
 MULTI_DISTANCE_OUTPUT, OUTPUT_DIM = True, 7
 DISTANCE_MODALITIES = ["GPC", "NMR", "IR"]
-SPECTRA_MODALITIES = list(MODALITIES)
+SPECTRA_MODALITIES = list(dict.fromkeys([*MODALITIES, *DISTANCE_MODALITIES]))
 FUSION_MODE = "cross_attention"
 D_MODEL, NHEAD, NUM_LAYERS, FF_MULT, DROPOUT = 96, 4, 3, 4, 0.10
 USE_GATED_FUSION, USE_INFO_NCE = False, False
@@ -92,7 +104,7 @@ def read_workbook(path, reaction_col):
             return rows
         finally:
             wb.close()
-
+    
 
 def condition_vector(record):
     return np.array(
@@ -763,8 +775,7 @@ class TransformerClosedLoop:
             + np.abs(pred_pdi - TARGET["PDI"]) / 0.20
             + np.abs(pred_conc - TARGET["Conc_Mean"]) / 20.0
         )
-        # Batch experiments are executed as 24 reactions. Score the whole batch
-        # by the best few members instead of greedily taking only one row.
+        # Score a batch by its lowest-scoring time-resolved member.
         if ACQ_MODE == "modality_distance_only":
             acquisition = distance_score
         elif ACQ_MODE == "weighted_modality_property":
@@ -949,3 +960,5 @@ class TransformerClosedLoop:
         }
         with (OUT_ROOT / "summary.json").open("w", encoding="utf-8") as f:
             json.dump(summary, f, ensure_ascii=False, indent=2)
+
+

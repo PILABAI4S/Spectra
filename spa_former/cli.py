@@ -103,8 +103,8 @@ def execute(args):
     if not 1 <= args.max_rounds <= 200 or min(args.epochs, args.threads) < 1:
         raise ValueError("Require 1-200 rounds and positive epochs/threads")
     seeds, policy = choose_seeds(args)
-    args.initial_file = (args.initial_file or args.data_dir / "Initial_experiments.xlsx").resolve()
-    args.all_file = (args.all_file or args.data_dir / "All_experiments.xlsx").resolve()
+    args.initial_file = (args.initial_file or args.data_dir / "Initial_experiments_sol.xlsx").resolve()
+    args.all_file = (args.all_file or args.data_dir / "All_experiments_sol.xlsx").resolve()
     args.spectra_root = (args.spectra_root or args.data_dir).resolve()
     for path in [args.initial_file, args.all_file]:
         if not path.is_file():
@@ -122,13 +122,16 @@ def execute(args):
     write_manifest(args.output / "seed_manifest.json", manifest)
     torch.set_num_threads(args.threads)
     base, _ = navigation.configure(seeds[0], args)
-    checked = navigation.preflight(base, args.spectra_root, args.audit_spectra)
+    navigation.validate_workbooks(base)
+    layout = navigation.fit_layout(base)
+    checked = navigation.preflight(base, layout, args.spectra_root, args.audit_spectra)
     base.set_seed(seeds[0])
-    model = base.SpectraConditionTransformer().eval()
+    model = navigation.install_raw_model(base, layout)().eval()
     checked["parameter_count"] = sum(p.numel() for p in model.parameters())
+    checked.update(model=navigation.VERSION, CNN=True, patch_encoder="modality-specific 1D CNN")
     with torch.no_grad():
-        prediction = model(torch.zeros(2, 60, 5), torch.zeros(2, 4))
-    if checked["parameter_count"] != 586663 or prediction.shape != (2, 7) or not torch.isfinite(prediction).all():
+        prediction = model(torch.zeros(2, layout.flat_dim), torch.zeros(2, 4))
+    if prediction.shape != (2, 7) or not torch.isfinite(prediction).all():
         raise RuntimeError("Unexpected spectral state navigation architecture")
     del model
     navigation.save_json(args.output / "preflight.json", checked)
@@ -146,13 +149,18 @@ def execute(args):
         raise ValueError("Fewer unrevealed batches than requested maximum rounds; reduce --max-rounds")
     for seed in seeds:
         base, settings = navigation.configure(seed, args)
+        layout = navigation.fit_layout(base)
+        navigation.install_raw_model(base, layout)
         base.OUT_ROOT.mkdir(exist_ok=False)
-        loop = navigation.make_loop_class(base)()
+        loop = navigation.make_loop_class(base, layout)()
         if args.device != "auto":
             loop.device = torch.device(args.device)
         navigation.save_json(base.OUT_ROOT / "run_settings.json", {"model": navigation.VERSION, "seed_generation": policy,
                      "configuration": settings, "output_dim": 7, "candidate_neighbors": 8,
-                     "spectral_distance_supervision": True, "spectral_ranking_weight": 0, "CNN": False})
+                     "spectral_distance_supervision": True, "spectral_ranking_weight": 0, "CNN": True,
+                     "target_spectra_in_candidate_input": False, "raw_patch_layout": layout.metadata(),
+                     "patch_encoder": {"channels": [1, 16, 32], "kernels": [7, 5], "strides": [4, 4],
+                                       "paddings": [3, 2], "activation": "GELU", "token_dim": 96}})
         print("RUN_START model={} seed={} device={}".format(navigation.VERSION, seed, loop.device), flush=True)
         try:
             logs, reason = loop.run()
