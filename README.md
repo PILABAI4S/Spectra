@@ -68,7 +68,7 @@ permissions. These weights and credentials are not included.
 ## Data
 
 Download the GPC, NMR and FTIR spectral dataset from this repository's
-[GitHub Releases](https://github.com/UsualLynn/Spectral-satate-navigation/releases).
+[GitHub Releases](https://github.com/PILABAI4S/Spectral-state-navigation/releases).
 Extract the spectral data archives into the project directory so that the
 `GPC/`, `NMR/` and `FTIR/` folders sit alongside the two experiment workbooks
 included in this repository.
